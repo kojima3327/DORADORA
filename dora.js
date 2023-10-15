@@ -1,7 +1,7 @@
 "use strict";
-const CHRWIDTH    = 8;                //キャラの幅
-const CHRHEIGHT   = 9;                //キャラの高さ
 const  FONT       = "48px monospace"; //使用フォント
+const  CHRWIDTH   = 8;                //キャラの幅
+const  CHRHEIGHT  = 9;                //キャラの高さ
 const  HEIGHT     = 120;              //仮想画面サイズ。高さ
 const  WIDTH      = 128;              //仮想画面サイズ。幅
 const  MAP_HEIGHT = 32;               //マップ高さ
@@ -17,7 +17,7 @@ let  gWidth;                   //実画面の幅
 let  gHeight;                  //実画面の高さ
 let  gImgMap;                  //画像、マップ
 let  gImgPlayer;               //画像、プレイヤー
-let  gPlayerX = 10;             //プレイヤー座標X
+let  gPlayerX = 10;            //プレイヤー座標X
 let  gPlayerY = 5;             //プレイヤー座標Y
 let  gScreen;                  //仮想画面
 
@@ -65,11 +65,17 @@ function DrawMain() {
         for ( let x = 0; x < 20; x++ ) {
             let px = gPlayerX + x ;
             let py = gPlayerY + y ;
-            DrawTile( g, x * TILESIZE, y * TILESIZE, gMap[ py * MAP_WIDTH + px ] );
+            DrawTile( g, x * TILESIZE - TILESIZE / 2 , y * TILESIZE, gMap[ py * MAP_WIDTH + px ] );
         }
     }
 
-    g.drawImage ( gImgPlayer, CHRWIDTH, 0, CHRWIDTH, CHRHEIGHT, WIDTH / 2, HEIGHT / 2, CHRWIDTH, CHRHEIGHT );
+    g.fillStyle = "#ff0000";
+    g.fillRect( 0, HEIGHT / 2 - 1, WIDTH, 2 );
+    g.fillRect( WIDTH / 2 - 1, 0, 2, HEIGHT )
+
+    g.drawImage ( gImgPlayer,
+        CHRWIDTH, 0, CHRWIDTH, CHRHEIGHT, WIDTH / 2 - CHRWIDTH / 2 ,
+    HEIGHT / 2 - CHRHEIGHT + TILESIZE / 2, CHRWIDTH, CHRHEIGHT );
     // g.font = FONT;                            //文字フォントを設定
     // g.fillText("Hello World" + gFrame, gFrame / 10, 64);
 }
@@ -96,6 +102,7 @@ function WmPaint()
 
     g.drawImage(gScreen, 0, 0, gScreen.width, gScreen.height, 0, 0, gWidth, gHeight); //仮想画面のイメージを実画面へ転送
 }
+
 // ブラウザサイズ変更イベント
 function WmSize()
 {
@@ -115,6 +122,7 @@ function WmSize()
         gWidth = gHeight * WIDTH / HEIGHT;
     }
 }
+
 //タイマーイベント発生時の処理
 function WmTimer()
 {
@@ -132,6 +140,7 @@ window.onkeydown = function( ev )
     if( c== 39 ) gPlayerX++;  //右
     if( c== 40 ) gPlayerY++;  //下
 }
+
 // ブラウザ起動イベント
 window.onload = function ()
 {
