@@ -3,8 +3,10 @@
         "CHRHEIGHT",
         "CHRWIDTH",
         "DONW",
+        "FONTSTYLE",
         "TILECOLUMN",
         "TILEROW",
-        "TILESIZE"
+        "TILESIZE",
+        "WNDSTYLE"
     ]
 }
