@@ -8,21 +8,28 @@ const  HEIGHT     = 120;                //仮想画面サイズ。高さ
 const  WIDTH      = 128;                //仮想画面サイズ。幅
 const  MAP_HEIGHT = 32;                 //マップ高さ
 const  MAP_WIDTH  = 32;                 //マップ幅
+const  SCR_HEIGHT = 8;                  //画面タイルサイズの半分の高さ
+const  SCR_WIDTH  = 8;                  //画面タイルサイズの半分の幅
 const  SMOOTH     = 0;                  //補完処理
 const  START_X    = 15;                 //開始位置X
-const  START_Y    = 18;                 //開始位置Y
+const  START_Y    = 17;                 //開始位置Y
 const  TILECOLUMN = 4;                  //タイル桁数
 const  TILEROW    = 4;                  //タイル行数
 const  TILESIZE   = 8;                  //タイルサイズ（ドット）
 const  WNDSTYLE   ="rgba( 0, 0, 0, 0.75 )";       //ウィンドウの色
 
+const  gKey = new Uint8Array( 0x100 );  //キー入力バッファ
+
+let  gAngle = 0;                        //プレイヤーの向き
 let  gFrame = 0;                        //内部カウンタ
-let  gWidth;                            //実画面の幅
 let  gHeight;                           //実画面の高さ
+let  gWidth;                            //実画面の幅
+let  gMoveX = 0;                        //移動量X
+let  gMoveY = 0;                        //移動量Y
 let  gImgMap;                           //画像、マップ
 let  gImgPlayer;                        //画像、プレイヤー
-let  gPlayerX = START_X * TILESIZE;     //プレイヤー座標X
-let  gPlayerY = START_Y * TILESIZE;     //プレイヤー座標Y
+let  gPlayerX = START_X * TILESIZE + TILESIZE / 2;     //プレイヤー座標X
+let  gPlayerY = START_Y * TILESIZE + TILESIZE / 2;     //プレイヤー座標Y
 let  gScreen;                           //仮想画面
 
 const gFileMap = "map.png";
@@ -66,22 +73,24 @@ const gMap = [
 function DrawMain() {
     const g = gScreen.getContext("2d");             //仮想画面の2D描画コンテキストを取得
 
-    let mx = Math.floor( gPlayerX / TILESIZE );
-    let my = Math.floor( gPlayerY / TILESIZE );
+    let mx = Math.floor( gPlayerX / TILESIZE );//プレイヤーのタイル座標X
+    //(math.floorは繰り下げの整数を返す-5=-6 や 5.95=5のように )
+    let my = Math.floor( gPlayerY / TILESIZE );//プレイヤーのタイル座標Y
 
 
 
-	for( let dy = -7; dy <= 7; dy++ ){
-		let		y = dy + 7;
+	for( let dy = -SCR_HEIGHT; dy <= SCR_HEIGHT; dy++ ){
         let     ty = my +dy;            //タイル座標Y
 		let		py = ( ty + MAP_HEIGHT ) % MAP_HEIGHT;   //ループ後タイル座標Y
-		for( let dx = -8; dx <= 8; dx++ ){
-			let		x = dx + 8;
+		for( let dx = -SCR_WIDTH; dx <= SCR_WIDTH; dx++ ){
             let     tx = mx +dx;        //タイル座標X
 			let		px = ( tx + MAP_WIDTH  ) % MAP_WIDTH;//ループ後タイル座標X
 			DrawTile( g,
-			          x * TILESIZE - TILESIZE / 2, y * TILESIZE,
-			          gMap[ py * MAP_WIDTH + px ] );
+                        tx * TILESIZE +
+                        WIDTH / 2 - gPlayerX,
+                        ty * TILESIZE +
+                        HEIGHT / 2 - gPlayerY,
+			            gMap[ py * MAP_WIDTH + px ] );
 		}
 	}
 
@@ -89,12 +98,13 @@ function DrawMain() {
     g.fillRect( 0, HEIGHT / 2 - 1, WIDTH, 2 );
     g.fillRect( WIDTH / 2 - 1, 0, 2, HEIGHT );
 
+    //プレイヤーの描画
     g.drawImage ( gImgPlayer,
-        CHRWIDTH, 0, CHRWIDTH, CHRHEIGHT, WIDTH / 2 - CHRWIDTH / 2 ,
+        ( gFrame >> 4 & 1 ) * CHRWIDTH, gAngle * CHRHEIGHT, CHRWIDTH, CHRHEIGHT, WIDTH / 2 - CHRWIDTH / 2 ,
     HEIGHT / 2 - CHRHEIGHT + TILESIZE / 2, CHRWIDTH, CHRHEIGHT );
 
     g.fillStyle = WNDSTYLE;  //ウィンドウの色
-    g.fillRect(20, 103, 105,15 );
+    g.fillRect( 20, 103, 105,15 );
 
     g.font = FONT;           //文字フォントを設定
     g.fillStyle = FONTSTYLE; //文字色
@@ -108,10 +118,46 @@ function DrawTile( g, x, y, idx )
     g.drawImage( gImgMap, ix, iy, TILESIZE, TILESIZE, x, y, TILESIZE, TILESIZE );
 }
 
-function LoadImage() {
-    gImgMap = new Image(); gImgMap.src = gFileMap;  //マップ画像読み込み
+function LoadImage()
+{
+    gImgMap    = new Image(); gImgMap.src = gFileMap;  //マップ画像読み込み
     gImgPlayer = new Image(); gImgPlayer.src = gFilePlayer;  //プレイヤー画像読み込み
+}
 
+//フィールド進行処理
+function TickField()
+{
+    if( gMoveX != 0 || gMoveY != 0 ){}         //移動中の場合
+    else if( gKey[ 37 ] ) { gAngle = 1; gMoveX = -TILESIZE; } //左
+    else if( gKey[ 38 ] ) { gAngle = 3; gMoveY = -TILESIZE; } //上
+    else if( gKey[ 39 ] ) { gAngle = 2; gMoveX = TILESIZE; } //右
+    else if( gKey[ 40 ] ) { gAngle = 0; gMoveY =
+    TILESIZE; }//下
+
+    //移動後のタイル座標判定
+    let mx = Math.floor( ( gPlayerX + gMoveX ) / TILESIZE ); //移動後のタイル座標X
+    let my = Math.floor( ( gPlayerY + gMoveY ) / TILESIZE ); //移動後のタイル座標Y
+
+    mx += MAP_WIDTH;                       //マップループ処理X
+    mx %= MAP_WIDTH;                       //マップループ処理X
+    my += MAP_HEIGHT;                      //マップループ処理Y
+    my %= MAP_HEIGHT;                      //マップループ処理Y
+    let m = gMap[ my * MAP_WIDTH + mx ];   //タイル番号
+    if ( m < 3 ) {
+        gMoveX = 0;                        //移動禁止X
+        gMoveY = 0;                        //移動禁止Y
+    }                                      //侵入不可の地形の場合
+
+    gPlayerX += Math.sign( gMoveX );       //プレイヤー座標移動X
+    gPlayerY += Math.sign( gMoveY );       //プレイヤー座標移動Y
+    gMoveX -= Math.sign( gMoveX );         //移動量消費X
+    gMoveY -= Math.sign( gMoveY );         //移動量消費Y
+
+//マップループ処理
+    gPlayerX +=  ( MAP_WIDTH * TILESIZE );
+    gPlayerX %=  ( MAP_WIDTH * TILESIZE );
+    gPlayerX +=  ( MAP_HEIGHT * TILESIZE );
+    gPlayerX %=  ( MAP_HEIGHT * TILESIZE );
 }
 
 function WmPaint()
@@ -147,7 +193,8 @@ function WmSize()
 //タイマーイベント発生時の処理
 function WmTimer()
 {
-    gFrame++;                                 //内部カウンタを加算
+    gFrame++;                 //内部カウンタを加算
+    TickField();              //フィールド進行処理
     WmPaint();
 }
 
@@ -155,17 +202,13 @@ function WmTimer()
 window.onkeydown = function( ev )
 {
     let c = ev.keyCode;       //キーコード取得
+    gKey[ c ] = 1;
+}
 
-    if( c== 37 ) gPlayerX--;  //左
-    if( c== 38 ) gPlayerY--;  //上
-    if( c== 39 ) gPlayerX++;  //右
-    if( c== 40 ) gPlayerY++;  //下
-
-//マップループ処理
-    g.gPlayerX +=  ( MAP_WIDTH * TILESIZE );
-    g.gPlayerX %=  ( MAP_WIDTH * TILESIZE );
-    g.gPlayerX +=  ( MAP_HEIGHT * TILESIZE );
-    g.gPlayerX %=  ( MAP_HEIGHT * TILESIZE );
+//キー入力(UP)イベント
+window.onkeyup = function( ev )
+{
+    gKey[ ev.keyCode ] = 0;
 }
 
 // ブラウザ起動イベント
