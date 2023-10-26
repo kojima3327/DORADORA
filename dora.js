@@ -28,6 +28,8 @@ let  gEx    = 0;                        //プレイヤーの経験値
 let  gHP    = START_HP;                 //プレイヤーのHP
 let  gMHP   = START_HP;                 //プレイヤーの最大HP
 let  gLv    = 1;                        //プレイヤーのレベル
+let  gCursor= 0;                        //カーソル位置
+let  gEnemyType;                        //敵種別
 let  gFrame = 0;                        //内部カウンタ
 let  gHeight;                           //実画面の高さ
 let  gWidth;                            //実画面の幅
@@ -49,6 +51,8 @@ const gFilePlayer  = "dora_img/player.png";
 const gFileMonster = "dora_img/monster.png";
 
 const gEncounter = [ 0, 0, 0, 1, 0, 0, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0 ];    //敵エンカウント確率
+
+const gMonsterName = ["スライム", "ウサギ", "ナイト", "ドラゴン", "魔王" ];    //モンスター名称
 
 //マップ
 const gMap = [
@@ -86,6 +90,52 @@ const gMap = [
     7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7, 7, 7, 7, 7,
 ];
 
+function Action()
+{
+    gPhase ++;                  //フェーズ経過
+
+    if ( gPhase == 3 ){
+        SetMessage( gMonsterName[ gEnemyType ] + "の攻撃！", 999 + "のダメージ！" );
+        gPhase = 7;
+        return;
+    }
+
+    if( gCursor == 0 ){         //「戦う」選択時
+        SetMessage( "あなたの攻撃！", 333 + "のダメージ！" );
+        gPhase = 5;
+        return;
+    }
+
+    if( Math.random() < 0.5 ){  //逃げる成功時
+        SetMessage( "逃げ切れたようだ..", null );
+        gPhase = 6;
+        return;
+    }
+
+    //「逃げる」失敗時
+    SetMessage( "あなたは逃げだした", "しかし回り込まれた！" );
+
+}
+
+//経験値加算
+function AddExp( val )
+{
+    gEx     += val;     //経験値加算
+
+    while( gLv * ( gLv + 1 ) * 2 <= gEx ){  //レベルアップ条件を満たしている場合
+        gLv++;          //レベルアップ
+        gMHP += 4 + Math.floor( Math.random() * 3 );//最大HP上昇4～6
+    }
+}
+//戦闘コマンド
+function CommandFight()
+{
+    gPhase = 2;           //戦闘コマンド選択フェーズ
+    gCursor = 0;
+    gCursor = 0;
+    SetMessage( "　　戦う", "　　逃げる" );
+}
+
 
 //戦闘画面描画処理
 function DrawFight( g )
@@ -93,11 +143,20 @@ function DrawFight( g )
     g.fillStyle = "#000000"             //背景色
     g.fillRect( 0, 0, WIDTH, HEIGHT );  //画面全体を短形描画
 
-    g.drawImage( gImgMonster, WIDTH / 2, HEIGHT /2 );
+    let w = gImgMonster.width / 4;
+    let h = gImgMonster.height;
+    g.drawImage( gImgMonster, gEnemyType * w, 0, w, h, Math.floor( WIDTH / 2 - w / 2), Math.floor( HEIGHT / 2 - h / 2 ), w, h );
+
+    DrawStatus( g );                    //ステータス描画
+    DrawMassage( g );                   //メッセージ描画
+
+    if( gPhase == 2 ){     //戦闘フェーズがコマンド選択中の場合
+        g.fillText( "=>", 6, 96 + 14 * gCursor );//カーソル描画
+    }
 }
 
-//マップ描画処理
-function DrawMap( g )
+//フィールド画面描画処理
+function DrawField( g )
 {
     let mx = Math.floor( gPlayerX / TILESIZE );//プレイヤーのタイル座標X
     let my = Math.floor( gPlayerY / TILESIZE );//プレイヤーのタイル座標Y
@@ -123,22 +182,25 @@ function DrawMap( g )
     g.drawImage ( gImgPlayer,
         ( gFrame >> 4 & 1 ) * CHRWIDTH, gAngle * CHRHEIGHT, CHRWIDTH, CHRHEIGHT, WIDTH / 2 - CHRWIDTH / 2 ,
     HEIGHT / 2 - CHRHEIGHT + TILESIZE / 2, CHRWIDTH, CHRHEIGHT );
+
+    //ステータスウィンドウ
+    g.fillStyle = WNDSTYLE;            //ウィンドウの色
+    g.fillRect( 2, 2, 44, 37 );        //短形描画
+
+    DrawStatus( g );                   //ステータス描画
+    DrawMassage( g );                  //メッセージ描画
+
 }
 
 function DrawMain()
 {
-    const g = gScreen.getContext("2d");     //仮想画面の2D描画コンテキストを取得
-    if( gPhase == 0 ) {
-        DrawMap( g );                           //マップ描画
+    const g = gScreen.getContext("2d");   //仮想画面の2D描画コンテキストを取得
+
+    if( gPhase <= 1 ) {
+        DrawField( g );                   //フィールド画面描画
     }else{
         DrawFight( g );
     }
-    //ステータスウィンドウ
-    g.fillStyle = WNDSTYLE;            //ウィンドウの色
-    g.fillRect( 2, 2, 34, 37 );        //短形描画
-
-    DrawStatus( g );                   //ステータス描画
-    DrawMassage( g );                  //メッセージ描画
 
     // g.fillStyle = WNDSTYLE;         //ウィンドウの色
     // g.fillRect( 20, 3, 105, 15 );   //短形描画
@@ -237,39 +299,43 @@ function TickField()
     if( Math.abs( gMoveX ) + Math.abs( gMoveY ) == SCROLL )
     {
         if( m == 8 || m == 9 ) {       //お城
+            gHP = gMHP;                //HP全回復
             SetMessage( "魔王を倒して！", null );
         }
 
         if( m == 10 || m == 11 ) {     //街
+            gHP = gMHP;                //HP全回復
             SetMessage( "西の果てにも村があ", "ります" );
         }
 
-        if( m == 12 ) {     //村
+        if( m == 12 ) {                //村
+            gHP = gMHP;                //HP全回復
             SetMessage( "カギは、洞窟にあり", "ます" );
         }
 
-        if( m == 13 ) {     //洞窟
-            gItem = 1;       //カギ入手
+        if( m == 13 ) {                //洞窟
+            gItem = 1;                 //カギ入手
             SetMessage( "カギを手に入れた", null );
         }
 
-        if( m == 14 ) {     //扉
+        if( m == 14 ) {                //扉
             if( gItem == 0 ) { //カギを保持していない場合
-                gPlayerY -= TILESIZE;    //1マス上へ移動
+                gPlayerY -= TILESIZE;  //1マス上へ移動
                 SetMessage( "カギがないと開かな","いようだ" );
             }else{
                 SetMessage( "扉が開いた", null );
             }
         }
 
-        if( m == 15 ) {     //ボス
+        if( m == 15 ) {                //ボス
             SetMessage( "魔王を倒し世界に平", "和が訪れた" );
         }
 
         if( Math.random() * 4 < gEncounter[ m ] ){
                             //ランダムエンカウント
             gPhase = 1;     //敵出現フェーズ
-            SetMessage( "敵が現れた！", null );
+            gEnemyType = 1;
+            SetMessage( gMonsterName[ gEnemyType ] + "が現れた！", null );
         }
     }
 
@@ -334,12 +400,51 @@ window.onkeydown = function( ev )
     }
     gKey[ c ] = 1;
 
-    if( gPhase == 1 ){
-        gPhase = 0;
-        gHP -= 5;
-        gEx   ++;
+    if( gPhase == 1 ) {        //敵が現れた場合
+        CommandFight();        //戦闘コマンド
+        return;
     }
 
+    if( gPhase == 2 ) {            //戦闘コマンド選択中の場合
+        if( c == 13 || c == 90  ) {//EnterキーまたはZキーの場合
+            Action();              //戦闘行動処理
+        }else{
+            gCursor = 1 - gCursor;//カーソル移動
+        }
+        return;
+    }
+
+    if( gPhase == 3 ){
+        Action();             //戦闘行動処理
+        return;
+    }
+
+    if( gPhase == 4 ){        //戦闘コマンド
+        CommandFight();
+        return;
+    }
+
+    if( gPhase == 5 ){
+        gPhase = 6;
+        AddExp( gEnemyType + 1 );  //経験値加算
+        SetMessage( gMonsterName[ gEnemyType ] + "をやっつけた！", null );
+        return;
+    }
+
+    if( gPhase == 6 ){
+        gPhase = 0;           //マップ移動フェーズ
+    }
+
+    if( gPhase == 7 ) {       //
+        gPhase = 8;
+        SetMessage( "あなたは死亡した", null );
+        return;
+    }
+
+    if( gPhase == 8 ) {       //
+        SetMessage( "ゲームオーバー", null );
+        return;
+    }
 
     gMessage1 = null;
 }
