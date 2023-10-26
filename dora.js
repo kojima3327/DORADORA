@@ -6,11 +6,14 @@ const  FONT       = "12px monospace";   //使用フォント
 const  FONTSTYLE  = "#ffffff";          //文字色
 const  HEIGHT     = 120;                //仮想画面サイズ。高さ
 const  WIDTH      = 128;                //仮想画面サイズ。幅
+const  INTERVAL   = 33;                 //フレーム呼び出し間隔
 const  MAP_HEIGHT = 32;                 //マップ高さ
 const  MAP_WIDTH  = 32;                 //マップ幅
 const  SCR_HEIGHT = 8;                  //画面タイルサイズの半分の高さ
 const  SCR_WIDTH  = 8;                  //画面タイルサイズの半分の幅
+const  SCROLL     = 1;                  //スクロール速度
 const  SMOOTH     = 0;                  //補完処理
+const  START_HP   = 20;                 //開始HP
 const  START_X    = 15;                 //開始位置X
 const  START_Y    = 17;                 //開始位置Y
 const  TILECOLUMN = 4;                  //タイル桁数
@@ -21,20 +24,33 @@ const  WNDSTYLE   ="rgba( 0, 0, 0, 0.75 )";       //ウィンドウの色
 const  gKey = new Uint8Array( 0x100 );  //キー入力バッファ
 
 let  gAngle = 0;                        //プレイヤーの向き
+let  gEx    = 0;                        //プレイヤーの経験値
+let  gHP    = START_HP;                 //プレイヤーのHP
+let  gMHP   = START_HP;                 //プレイヤーの最大HP
+let  gLv    = 1;                        //プレイヤーのレベル
 let  gFrame = 0;                        //内部カウンタ
 let  gHeight;                           //実画面の高さ
 let  gWidth;                            //実画面の幅
+let  gMessage1 = null;                  //表示メッセージ
+let  gMessage2 = null;                  //表示メッセージ
 let  gMoveX = 0;                        //移動量X
 let  gMoveY = 0;                        //移動量Y
 let  gImgMap;                           //画像、マップ
+let  gItem  = 0;                        //所持アイテム
+let  gPhase = 0;                        //戦闘フェーズ
 let  gImgPlayer;                        //画像、プレイヤー
+let  gImgMonster;                       //画像、モンスター
 let  gPlayerX = START_X * TILESIZE + TILESIZE / 2;     //プレイヤー座標X
 let  gPlayerY = START_Y * TILESIZE + TILESIZE / 2;     //プレイヤー座標Y
 let  gScreen;                           //仮想画面
 
-const gFileMap = "map.png";
-const gFilePlayer = "player.png";
+const gFileMap     = "dora_img/map.png";
+const gFilePlayer  = "dora_img/player.png";
+const gFileMonster = "dora_img/monster.png";
 
+const gEncounter = [ 0, 0, 0, 1, 0, 0, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0 ];    //敵エンカウント確率
+
+//マップ
 const gMap = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 3, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -70,14 +86,21 @@ const gMap = [
     7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7, 7, 7, 7, 7,
 ];
 
-function DrawMain() {
-    const g = gScreen.getContext("2d");             //仮想画面の2D描画コンテキストを取得
 
+//戦闘画面描画処理
+function DrawFight( g )
+{
+    g.fillStyle = "#000000"             //背景色
+    g.fillRect( 0, 0, WIDTH, HEIGHT );  //画面全体を短形描画
+
+    g.drawImage( gImgMonster, WIDTH / 2, HEIGHT /2 );
+}
+
+//マップ描画処理
+function DrawMap( g )
+{
     let mx = Math.floor( gPlayerX / TILESIZE );//プレイヤーのタイル座標X
-    //(math.floorは繰り下げの整数を返す-5=-6 や 5.95=5のように )
     let my = Math.floor( gPlayerY / TILESIZE );//プレイヤーのタイル座標Y
-
-
 
 	for( let dy = -SCR_HEIGHT; dy <= SCR_HEIGHT; dy++ ){
         let     ty = my +dy;            //タイル座標Y
@@ -86,11 +109,9 @@ function DrawMain() {
             let     tx = mx +dx;        //タイル座標X
 			let		px = ( tx + MAP_WIDTH  ) % MAP_WIDTH;//ループ後タイル座標X
 			DrawTile( g,
-                        tx * TILESIZE +
-                        WIDTH / 2 - gPlayerX,
-                        ty * TILESIZE +
-                        HEIGHT / 2 - gPlayerY,
-			            gMap[ py * MAP_WIDTH + px ] );
+                tx * TILESIZE + WIDTH / 2 - gPlayerX,
+                ty * TILESIZE + HEIGHT / 2 - gPlayerY,
+                gMap[ py * MAP_WIDTH + px ] );
 		}
 	}
 
@@ -102,13 +123,58 @@ function DrawMain() {
     g.drawImage ( gImgPlayer,
         ( gFrame >> 4 & 1 ) * CHRWIDTH, gAngle * CHRHEIGHT, CHRWIDTH, CHRHEIGHT, WIDTH / 2 - CHRWIDTH / 2 ,
     HEIGHT / 2 - CHRHEIGHT + TILESIZE / 2, CHRWIDTH, CHRHEIGHT );
+}
 
-    g.fillStyle = WNDSTYLE;  //ウィンドウの色
-    g.fillRect( 20, 103, 105,15 );
+function DrawMain()
+{
+    const g = gScreen.getContext("2d");     //仮想画面の2D描画コンテキストを取得
+    if( gPhase == 0 ) {
+        DrawMap( g );                           //マップ描画
+    }else{
+        DrawFight( g );
+    }
+    //ステータスウィンドウ
+    g.fillStyle = WNDSTYLE;            //ウィンドウの色
+    g.fillRect( 2, 2, 34, 37 );        //短形描画
 
-    g.font = FONT;           //文字フォントを設定
-    g.fillStyle = FONTSTYLE; //文字色
-    g.fillText("x=" + gPlayerX + "y=" + gPlayerY + "m=" + gMap[ my * MAP_WIDTH + mx ], 25, 115);
+    DrawStatus( g );                   //ステータス描画
+    DrawMassage( g );                  //メッセージ描画
+
+    // g.fillStyle = WNDSTYLE;         //ウィンドウの色
+    // g.fillRect( 20, 3, 105, 15 );   //短形描画
+
+    // g.font = FONT;                  //文字フォントを設定
+    // g.fillStyle = FONTSTYLE;        //文字色
+
+    // g.fillText("x=" + gPlayerX + "y=" + gPlayerY + "m=" + gMap[ my * MAP_WIDTH + mx ], 25, 15 );
+}
+
+//メッセージ描画
+function DrawMassage( g )
+{
+    if ( !gMessage1 ) {          //メッセージ内容が存在しない場合
+        return;
+    }
+
+    g.fillStyle = WNDSTYLE;         //ウィンドウの色
+    g.fillRect( 4, 84, 120, 30 );   //短形描画
+
+    g.font = FONT;                  //文字フォントを設定
+    g.fillStyle = FONTSTYLE;        //文字色
+    g.fillText( gMessage1, 6, 96 ); //メッセージ1行目描画
+    if ( gMessage2 ) {
+        g.fillText( gMessage2, 6, 110 );//メッセージ2行目描画
+    }
+}
+
+//ステータス描画
+function DrawStatus( g )
+{
+    g.font = FONT;                    //文字フォントを設定
+    g.fillStyle = FONTSTYLE;          //文字色
+    g.fillText( "Lv" + gLv , 4, 13 ); //Lv
+    g.fillText( "HP" + gHP , 4, 25 ); //HP
+    g.fillText( "Ex" + gEx , 4, 37 ); //Ex
 }
 
 function DrawTile( g, x, y, idx )
@@ -120,14 +186,33 @@ function DrawTile( g, x, y, idx )
 
 function LoadImage()
 {
-    gImgMap    = new Image(); gImgMap.src = gFileMap;  //マップ画像読み込み
-    gImgPlayer = new Image(); gImgPlayer.src = gFilePlayer;  //プレイヤー画像読み込み
+    gImgMap     = new Image(); gImgMap.src     = gFileMap;     //マップ画像読み込み
+    gImgMonster = new Image(); gImgMonster.src = gFileMonster; //モンスター画像読み込み
+    gImgPlayer  = new Image(); gImgPlayer.src  = gFilePlayer;  //プレイヤー画像読み込み
+}
+
+function SetMessage( v1, v2 )
+{
+    gMessage1 = v1;
+    gMessage2 = v2;
+}
+
+//IE対応
+function Sign( val )
+{
+    if( val == 0 ) {
+        return( 0 );
+    }
+    if( val < 0 ) {
+        return( -1 );
+    }
+    return( 1 );
 }
 
 //フィールド進行処理
 function TickField()
 {
-    if( gMoveX != 0 || gMoveY != 0 ){}         //移動中の場合
+    if( gMoveX != 0 || gMoveY != 0 || gMessage1 ){}         //移動中またはメッセージ表示中の場合
     else if( gKey[ 37 ] ) { gAngle = 1; gMoveX = -TILESIZE; } //左
     else if( gKey[ 38 ] ) { gAngle = 3; gMoveY = -TILESIZE; } //上
     else if( gKey[ 39 ] ) { gAngle = 2; gMoveX = TILESIZE; } //右
@@ -148,10 +233,50 @@ function TickField()
         gMoveY = 0;                        //移動禁止Y
     }                                      //侵入不可の地形の場合
 
-    gPlayerX += Math.sign( gMoveX );       //プレイヤー座標移動X
-    gPlayerY += Math.sign( gMoveY );       //プレイヤー座標移動Y
-    gMoveX -= Math.sign( gMoveX );         //移動量消費X
-    gMoveY -= Math.sign( gMoveY );         //移動量消費Y
+    //マス目移動が終わる直前
+    if( Math.abs( gMoveX ) + Math.abs( gMoveY ) == SCROLL )
+    {
+        if( m == 8 || m == 9 ) {       //お城
+            SetMessage( "魔王を倒して！", null );
+        }
+
+        if( m == 10 || m == 11 ) {     //街
+            SetMessage( "西の果てにも村があ", "ります" );
+        }
+
+        if( m == 12 ) {     //村
+            SetMessage( "カギは、洞窟にあり", "ます" );
+        }
+
+        if( m == 13 ) {     //洞窟
+            gItem = 1;       //カギ入手
+            SetMessage( "カギを手に入れた", null );
+        }
+
+        if( m == 14 ) {     //扉
+            if( gItem == 0 ) { //カギを保持していない場合
+                gPlayerY -= TILESIZE;    //1マス上へ移動
+                SetMessage( "カギがないと開かな","いようだ" );
+            }else{
+                SetMessage( "扉が開いた", null );
+            }
+        }
+
+        if( m == 15 ) {     //ボス
+            SetMessage( "魔王を倒し世界に平", "和が訪れた" );
+        }
+
+        if( Math.random() * 4 < gEncounter[ m ] ){
+                            //ランダムエンカウント
+            gPhase = 1;     //敵出現フェーズ
+            SetMessage( "敵が現れた！", null );
+        }
+    }
+
+    gPlayerX += Sign( gMoveX ) * SCROLL ;       //プレイヤー座標移動X
+    gPlayerY += Sign( gMoveY ) * SCROLL ;       //プレイヤー座標移動Y
+    gMoveX -= Sign( gMoveX ) * SCROLL ;         //移動量消費X
+    gMoveY -= Sign( gMoveY ) * SCROLL ;         //移動量消費Y
 
 //マップループ処理
     gPlayerX +=  ( MAP_WIDTH * TILESIZE );
@@ -202,7 +327,21 @@ function WmTimer()
 window.onkeydown = function( ev )
 {
     let c = ev.keyCode;       //キーコード取得
+
+    if( gKey[ c ] != 0 )
+    {
+        return;               //既に押下中の場合（キーリピート）
+    }
     gKey[ c ] = 1;
+
+    if( gPhase == 1 ){
+        gPhase = 0;
+        gHP -= 5;
+        gEx   ++;
+    }
+
+
+    gMessage1 = null;
 }
 
 //キー入力(UP)イベント
@@ -222,5 +361,5 @@ window.onload = function ()
 
     WmSize();                                        //画面サイズ初期化
     window.addEventListener("resize", function () { WmSize() });//ブラウザサイズ変更時、WmSize()が呼ばれるよう
-    setInterval(function () { WmTimer() }, 33);                 //33ms間隔で、WmTimer()を呼び出すよう指示(約30.3fps)
+    setInterval(function () { WmTimer() }, INTERVAL );                 //33ms間隔で、WmTimer()を呼び出すよう指示(約30.3fps)
 }
