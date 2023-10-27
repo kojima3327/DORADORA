@@ -202,9 +202,10 @@ function DrawField( g )
 		}
 	}
 
-    g.fillStyle = "#ff0000";
-    g.fillRect( 0, HEIGHT / 2 - 1, WIDTH, 2 );
-    g.fillRect( WIDTH / 2 - 1, 0, 2, HEIGHT );
+    //デバッグ用プレイヤーあたり
+    // g.fillStyle = "#ff0000";
+    // g.fillRect( 0, HEIGHT / 2 - 1, WIDTH, 2 );
+    // g.fillRect( WIDTH / 2 - 1, 0, 2, HEIGHT );
 
     //プレイヤーの描画
     g.drawImage ( gImgPlayer,
